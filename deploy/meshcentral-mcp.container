@@ -1,0 +1,25 @@
+[Unit]
+Description=MeshCentral MCP Bridge
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=localhost/meshcentral-mcp:0.1.0
+ContainerName=meshcentral-mcp
+PublishPort=127.0.0.1:8787:8787
+Volume=/opt/meshcentral-mcp/config.json:/app/config.json:ro,Z
+Volume=meshcentral-mcp-data:/app/data
+Secret=meshcentral-mcp-password,target=mesh-password,uid=1000,gid=1000,mode=0400
+Secret=meshcentral-mcp-owner,target=owner-hash,uid=1000,gid=1000,mode=0400
+ReadOnly=true
+NoNewPrivileges=true
+DropCapability=all
+PodmanArgs=--pids-limit=128 --memory=256m --cpus=1
+
+[Service]
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target
