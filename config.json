@@ -1,0 +1,14 @@
+{
+  "name": "MeshCentral MCP Bridge",
+  "shortName": "meshcentralmcp",
+  "version": "0.2.0",
+  "author": "Sören Elvers",
+  "description": "Native MCP bridge with OAuth, device allowlist and optional remote commands",
+  "hasAdminPanel": true,
+  "homepage": "https://github.com/soerenelvers/meshcentral-mcp",
+  "changelogUrl": "https://raw.githubusercontent.com/soerenelvers/meshcentral-mcp/main/changelog.md",
+  "configUrl": "https://raw.githubusercontent.com/soerenelvers/meshcentral-mcp/main/config.json",
+  "downloadUrl": "https://github.com/soerenelvers/meshcentral-mcp/archive/refs/heads/main.zip",
+  "repository": { "type": "git", "url": "https://github.com/soerenelvers/meshcentral-mcp.git" },
+  "meshCentralCompat": ">=1.1.35"
+}
