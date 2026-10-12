@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 
 export function validateConfig(c) {
   const publicUrl = new URL(c.publicUrl);
-  if (publicUrl.pathname !== '/' || publicUrl.search || publicUrl.hash || publicUrl.username || publicUrl.password) throw new Error('publicUrl muss eine reine Origin sein.');
+  if (!['/','/meshcentral-mcp','/meshcentral-mcp/'].includes(publicUrl.pathname) || publicUrl.search || publicUrl.hash || publicUrl.username || publicUrl.password) throw new Error('publicUrl muss eine Origin oder den Pfad /meshcentral-mcp verwenden.');
   if (publicUrl.protocol !== 'https:' && !(publicUrl.protocol === 'http:' && ['localhost','127.0.0.1','[::1]'].includes(publicUrl.hostname))) throw new Error('publicUrl benötigt HTTPS.');
   const meshUrl = new URL(c.meshUrl);
   if (meshUrl.protocol !== 'https:' || meshUrl.username || meshUrl.password || meshUrl.search || meshUrl.hash) throw new Error('meshUrl benötigt HTTPS ohne Zugangsdaten oder Query.');
@@ -11,7 +11,7 @@ export function validateConfig(c) {
   if (typeof c.enableCommands !== 'boolean') throw new Error('enableCommands muss true/false sein.');
   if (!Number.isInteger(c.port) || c.port < 1 || c.port > 65535) throw new Error('Ungültiger Port.');
   if (!Number.isInteger(c.commandTimeoutSeconds) || c.commandTimeoutSeconds < 5 || c.commandTimeoutSeconds > 600) throw new Error('commandTimeoutSeconds: 5–600.');
-  return { ...c, publicUrl: publicUrl.origin };
+  return { ...c, publicUrl: publicUrl.origin + (publicUrl.pathname === '/' ? '' : '/meshcentral-mcp') };
 }
 
 export function loadConfig() {
