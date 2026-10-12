@@ -1,192 +1,101 @@
-# MeshCentral MCP Bridge 0.1.0
+# MeshCentral MCP Bridge 0.2.0
 
-Persönliches ChatGPT-Plugin über einen selbst gehosteten MCP-Server. `mesh.example.com`, `mcp-mesh.example.com` und `mcp-service` sind Platzhalter. Serveradressen, Kontoname und vollständige Geräte-ID bei der Einrichtung lokal eintragen.
+Natives MeshCentral-Server-Plugin. Installation über **Mein Server → Plugins → Plugin herunterladen**. MCP und OAuth laufen im bestehenden MeshCentral-Webserver; kein zusätzlicher Podman-Container und keine zweite Subdomain erforderlich.
 
-## Funktionen
+## Installations-URL
+
+```text
+https://raw.githubusercontent.com/soerenelvers/meshcentral-mcp/main/config.json
+```
+
+Das Feld „Plugin Download URL“ erwartet dieses JSON-Manifest, nicht den ZIP-Link. Das Manifest verweist auf das vollständige ZIP mit Pluginmodul und vorgebauten Abhängigkeiten.
+
+## Einrichten
+
+1. In MeshCentral als vollständiger Administrator anmelden.
+2. **Mein Server → Plugins → Plugin herunterladen** öffnen und die Installations-URL eingeben.
+3. Das Plugin **MeshCentral MCP Bridge** installieren/aktivieren. Falls die Liste zunächst nur einen verfügbaren Download anzeigt, in **Aktion** die Installation starten.
+4. **MeshCentral neu starten**, damit die HTTP-Hooks vor den vorhandenen Webseitenrouten registriert werden.
+5. Das Konfigurationspanel des Plugins öffnen. Alternativ auf dem eigenen MeshCentral-Server den relativen Pfad `pluginadmin.ashx?pin=meshcentralmcp` öffnen.
+6. Folgende Werte eingeben:
+
+| Feld | Beispiel / Bedeutung |
+|---|---|
+| MCP-Basisadresse | `https://mesh.example.com/meshcentral-mcp` — eigene MeshCentral-Adresse verwenden |
+| MeshCentral-Adresse | `https://mesh.example.com/` — HTTPS-Adresse des vorhandenen Servers |
+| MeshCentral-Servicekonto | Ein eigenes Konto mit Rechten ausschließlich auf die gewünschten Geräte |
+| MeshCentral-Passwort | Passwort dieses Servicekontos; lokal im Panel eingeben |
+| Brücken-Passwort | Eigenes Passwort mit mindestens 16 Zeichen für die OAuth-Verbindung von ChatGPT |
+| Geräte-IDs | Vollständige IDs im Format `node/<domain>/<id>`, eine pro Zeile |
+| Befehle freigeben | Optional; zunächst ausgeschaltet lassen |
+
+Alle Beispieladressen und Kontonamen sind Platzhalter. Zugangsdaten nicht in GitHub oder Chatnachrichten eintragen. Vollständige Geräte-IDs sind in der Geräte-URL nach `gotonode=` sichtbar; dort steht oft nur der letzte Teil. In der Standarddomain wird `node//` davor gesetzt. Bei einer eigenen MeshCentral-Domain lautet die ID `node/<domain>/<letzter-Teil>`. Die ID nach der Einrichtung mit der Geräteübersicht bestätigen.
+
+7. Konfiguration speichern. Die aktuelle MCP-URL wird im Panel angezeigt.
+8. Ohne Login den MCP-Endpunkt prüfen: eine **401**-Antwort mit OAuth-Hinweis ist erwartet; **404** bedeutet häufig, dass der Neustart fehlt; **503** bedeutet deaktiviert oder unkonfiguriert.
+9. In ChatGPT im Webbrowser **Plugins → Plus → Eigenen MCP-Server hinzufügen** öffnen.
+10. Name `MeshCentral`; Server-URL aus dem Panel übernehmen, beispielsweise `https://mesh.example.com/meshcentral-mcp/mcp`.
+11. Authentifizierung **OAuth** wählen. Dynamische Clientregistrierung (**DCR**) verwenden; keine statische Client-ID/kein Client-Secret erforderlich. CIMD wird nicht implementiert.
+12. Plugin erstellen, installieren und verbinden. Auf der Anmeldeseite das separate **Brücken-Passwort** eingeben und den Zugriff freigeben.
+
+Erste Anfrage in einem neuen Chat:
+
+> Zeige mit MeshCentral alle freigegebenen Geräte und prüfe ihren Status.
+
+Wenn das funktioniert, bei Bedarf im Konfigurationspanel Befehle freigeben, speichern und die Werkzeuge/OAuth-Verbindung in ChatGPT aktualisieren. Anschließend zunächst einen kurzen, lesenden Befehl wie `hostname` testen.
+
+## Werkzeuge
 
 | Werkzeug | Funktion |
 |---|---|
 | `meshcentral_devices` | Freigegebene Geräte und Agent-Verbindungsstatus |
-| `meshcentral_device_status` | Status eines Geräts anhand seiner vollständigen ID |
-| `meshcentral_command_start` | Linux-Shell, Windows CMD oder PowerShell; liefert eine Auftrags-ID |
-| `meshcentral_command_result` | Rückmeldung zu einem Auftrag; höchstens 64 KiB |
+| `meshcentral_device_status` | Gerätestatus anhand einer vollständigen ID |
+| `meshcentral_command_start` | Nicht interaktiver Linux-, CMD- oder PowerShell-Befehl; liefert eine Auftrags-ID |
+| `meshcentral_command_result` | Rückmeldung zum Auftrag; maximal 64 KiB |
 
-Befehle sind zunächst deaktiviert. Die Brücke bietet nicht interaktive Befehle, keine grafische Desktopsteuerung, Dateiübertragung oder interaktive Terminaldialoge. Sie braucht keinen OpenAI-API-Schlüssel.
+Kein grafischer Remote-Desktop, keine Dateiübertragung, keine interaktive Passwortabfrage. Ein OpenAI-API-Schlüssel ist nicht erforderlich.
 
-## Aufbau und Grenzen
+## Anforderungen und Betriebsgrenzen
 
-ChatGPT → HTTPS + OAuth/PKCE → MCP-Brücke → verschlüsselter MeshCentral-Control-WebSocket → Geräteagent.
+- MeshCentral mit Pluginunterstützung; Manifest-Mindestversion 1.1.35. Das native Modul verwendet `hook_setupHttpHandlers`, `server_startup`, `handleAdminReq` und `handleAdminPostReq`.
+- Node.js **22 oder neuer**, gültiges HTTPS-Zertifikat und ausgehender HTTPS-Zugriff auf die eigene MeshCentral-Adresse. Das vorgebaute Bundle wurde unter Node.js 24 geprüft.
+- Standarddomain unter dem URL-Wurzelpfad. Eigene URL-Domain-Unterpfade müssen vor Einsatz angepasst und getestet werden.
+- Für ein Besitzerkonto ausgelegt. Das Servicekonto wird über MeshCentrals normalen Control-WebSocket angemeldet. MFA-/SSO-Zwang dieses Kontos kann die unbeaufsichtigte Anmeldung blockieren; solche Schutzfunktionen nicht dafür abschalten.
+- Die Brücke prüft TLS-Zertifikate, Gerätefreigabeliste und MeshCentral-Servicekonto-Rechte. Ein MeshCentral-Server-Masterschlüssel wird nicht verwendet.
+- Nicht interaktive Befehle können mit root-/SYSTEM-Rechten laufen. Die Gerätefreigabe ist keine Shell-Sandbox. Befehle sind standardmäßig ausgeschaltet.
+- Ein Timeout beendet nur die Wartezeit, nicht den entfernten Prozess. Keine automatische Wiederholung bei unbekannter Ausführung. Eine Bestätigung `acknowledged` beweist keinen erfolgreichen Abschluss. `response_received` enthält eine Agent-Rückmeldung; ein unabhängig verifizierter Exit-Code ist nicht vorhanden.
+- MeshCentral selbst kann Befehlsinhalte und Ausgaben in Ereignissen/Konsolen speichern. Keine Zugangsdaten in Befehle einbetten.
 
-Die Brücke prüft Zertifikate und beschränkt jedes Gerät auf die lokale Freigabeliste. Zusätzlich gelten die Rechte des MeshCentral-Kontos. Der MCP-Benutzer bekommt keine MeshCentral-Zugangsdaten: diese liegen in einem Podman-Secret. Das separate Brücken-Passwort wird nur als scrypt-Hash gespeichert.
+## Speicherung und Deaktivierung
 
-Version 0.1 ist für einen Besitzer und ein ChatGPT-Konto gedacht. OAuth mit dynamischer Clientregistrierung und PKCE S256 ist implementiert; Clientregistrierungen bleiben im Datenvolume erhalten. OAuth-Tokens und Befehlsrückmeldungen liegen im RAM. Nach einem Neustart in ChatGPT erneut verbinden/anmelden. Rückmeldungen verfallen nach einer Stunde. Neue OAuth-Freigabe ist auch nötig, wenn der Berechtigungsumfang erweitert wird.
+Die private Konfiguration liegt außerhalb des Pluginordners unter `meshcentral-data/meshcentral-mcp/settings.json` (Verzeichnis 0700, Datei 0600). Sie enthält das Servicekonto-Passwort; das Brücken-Passwort wird als scrypt-Hash gespeichert. Das bestehende MeshCentral-Datenverzeichnis muss persistent und angemessen geschützt sein. Diese Dateien gehören nicht in das Repository.
 
-Nicht interaktive Befehle laufen mit Agent-Rechten, unter Linux möglicherweise als root, unter Windows häufig als SYSTEM. Ein Shelltext kann beliebige Änderungen vornehmen; die Gerätefreigabe ist keine Befehls-Sandbox. MeshCentral kann Befehlsinhalte und Ausgaben in seinen eigenen Ereignissen/Konsolen speichern. Keine Passwörter als Befehle übergeben.
+OAuth-Clientregistrierungen werden im Unterordner `oauth` gespeichert. Tokens und Befehlsaufträge liegen im RAM; Neustart oder Konfigurationsänderung erfordern erneute OAuth-Anmeldung. Auftragsrückmeldungen verfallen nach einer Stunde. Updates überschreiben keine private Konfiguration.
 
-`pending` bedeutet: Rückmeldung später erneut abfragen. Ein Timeout beendet nur die Wartezeit der Brücke, **nicht** den entfernten Prozess. Die Brücke wiederholt Befehle nicht. Bei `acknowledged` ist nur eine Bestätigung eingegangen. `response_received` enthält eine Agent-Rückmeldung; der Exit-Code wird vom verwendeten MeshCentral-Protokoll nicht unabhängig nachgewiesen. Bei unklarer Ausführung vor Wiederholung den tatsächlichen Gerätezustand prüfen.
+Wird das Plugin in MeshCentral deaktiviert, blockiert der eingebundene Router neue MCP- und OAuth-Anfragen mit 503. Bereits an Geräte gesendete Befehle werden dadurch nicht abgebrochen. Nach einem Update MeshCentral neu starten, dann Werkzeuge und Verbindung in ChatGPT aktualisieren.
 
-## 1. Ablage vorbereiten
-
-ZIP entpacken. Das Verzeichnis `meshcentral-mcp` vollständig nach `/opt/meshcentral-mcp` auf dem gewünschten Host übertragen. Die Befehle als derselbe Linux-Benutzer ausführen, der auch den neuen rootlosen Podman-Container betreiben soll; nicht zwischen `podman` und `sudo podman` wechseln.
-
-```bash
-sudo mkdir -p /opt/meshcentral-mcp
-sudo chown "$USER":"$(id -gn)" /opt/meshcentral-mcp
-cd /opt/meshcentral-mcp
-podman --version
-podman info --format '{{.Host.CgroupsVersion}}'
-```
-
-Voraussetzungen: Podman mit Quadlet (4.4 oder neuer), cgroup v2, systemd-Benutzersitzung und ausgehender HTTPS-Zugriff zu MeshCentral und zum Container-/npm-Registry. Auf einem älteren Podman-System zuerst prüfen, ob `/usr/lib/systemd/system-generators/podman-system-generator` vorhanden ist. Ein Produktions-Containerbuild wurde in der Erstellungsumgebung mangels Podman nicht ausgeführt.
-
-## 2. Zugang lokal einrichten
-
-In MeshCentral das vorhandene Konto `mcp-service` benutzen. Es braucht Sichtbarkeit auf die gewünschten Geräte und für Befehle die Berechtigung **Befehle/Remote Commands**. Kein MeshCentral-Server-Masterschlüssel wird benötigt. Verwendet wird die normale WebSocket-Anmeldung mit Benutzername/Passwort. Wenn dieses Konto zwingende MFA oder externe SSO-Anmeldung hat, kann dieser erste Adapter die Anmeldung nicht automatisch abschließen; die MFA nicht dafür abschalten. Dann ist eine Erweiterung auf den vom Server unterstützten kontoabhängigen Tokenzugang nötig.
-
-Mit installiertem Node.js 22 oder neuer:
+## Entwicklung und Tests
 
 ```bash
-node src/setup.js
-```
-
-Alternativ ohne Node.js auf dem Host:
-
-```bash
-podman run --rm -it \
-  --userns=keep-id --user "$(id -u):$(id -g)" \
-  -v "$PWD:/work:Z" -w /work \
-  docker.io/library/node:24-bookworm-slim node src/setup.js
-```
-
-Das Setup fragt URL, Benutzer und Geräte-ID ab. MeshCentral-Passwort und ein eigenes Brücken-Passwort (mindestens 16 Zeichen) werden verdeckt eingegeben. Das Brücken-Passwort aufbewahren: es wird später für die ChatGPT-Verbindung gebraucht. Kein Passwort in ChatGPT-Nachrichten einfügen. Das Setup überschreibt keine bestehenden Konfigurationen.
-
-Die eingegebene ID von Beispielserver bitte beim ersten Aufruf von `meshcentral_devices` bestätigen. Weitere Geräte später nur mit vollständigem `node/<domain>/<id>` in `allowedNodeIds` aufnehmen. Namen sind keine IDs. Gibt die Liste kein Gerät zurück, zuerst ID und MeshCentral-Rechte prüfen.
-
-## 3. Podman-Secrets und Image
-
-```bash
-podman secret create meshcentral-mcp-password secrets/mesh-password
-podman secret create meshcentral-mcp-owner secrets/owner-hash
-podman volume create meshcentral-mcp-data
-podman build -t localhost/meshcentral-mcp:0.1.0 -f Containerfile .
-```
-
-`secrets/` ist vom Containerbuild ausgeschlossen. Die Dateien sind lokal nur für ihren Besitzer lesbar. Nach der erfolgreichen Einrichtung verschlüsselt sichern oder geschützt verwahren. Bei schon existierenden Secrets bricht `secret create` ab; es überschreibt sie nicht.
-
-## 4. Als Dienst starten
-
-Für die mitgelieferte Quadlet-Datei muss `config.json` tatsächlich unter `/opt/meshcentral-mcp` liegen. Für einen anderen Ablageort `Volume=` anpassen.
-
-```bash
-mkdir -p ~/.config/containers/systemd
-cp deploy/meshcentral-mcp.container ~/.config/containers/systemd/
-sudo loginctl enable-linger "$USER"
-systemctl --user daemon-reload
-systemctl --user start meshcentral-mcp.service
-systemctl --user status meshcentral-mcp.service
-curl --fail http://127.0.0.1:8787/healthz
-```
-
-Erwartet: `{"status":"ok","version":"0.1.0"}`. `WantedBy=default.target` in der Quadlet-Datei aktiviert den Dienst beim Start der Benutzersitzung; kein zusätzliches `systemctl enable` verwenden. Der Container läuft als Benutzer `node`, ohne Host-Socket, ohne Host-Netz und mit schreibgeschütztem Image-Dateisystem. Nur OAuth-Clientmetadaten werden in das Datenvolume geschrieben.
-
-```bash
-journalctl --user -u meshcentral-mcp.service -n 50 --no-pager
-```
-
-## 5. HTTPS und Plesk
-
-Zuerst klären: **Auf welchem Host läuft Plesk, auf welchem die Brücke?** Die mitgelieferte Proxy-Konfiguration gilt nur, wenn beide auf demselben Host laufen. Läuft Plesk auf einem anderen Server als Beispielserver, erreicht dessen `127.0.0.1` nicht Beispielserver. Dann entweder die Brücke auf dem Plesk-Host betreiben oder eine verschlüsselte private Verbindung zwischen beiden Hosts einrichten und den Proxy entsprechend anpassen. Port 8787 wird in der Vorlage ausschließlich lokal veröffentlicht.
-
-Für Plesk und Brücke auf demselben Host:
-
-1. Eigene Subdomain `mcp-mesh.example.com` anlegen; DNS auf diesen Host zeigen lassen.
-2. Gültiges TLS-Zertifikat für diese Subdomain ausstellen, z. B. Let's Encrypt.
-3. HTTPS-Weiterleitung aktivieren.
-4. Bei dieser Subdomain unter **Apache & nginx-Einstellungen → Zusätzliche nginx-Anweisungen** den Inhalt aus `deploy/nginx-plesk.conf` einfügen und anwenden.
-5. Die gezielten Pfadregeln vermeiden ein zusätzliches `location /`, das in Plesk mit bestehenden Regeln kollidieren kann. Vorhandene Regeln prüfen. Kein globales Plesk-Template ändern.
-6. Kein Basic-Auth/Passwortschutz vor diese OAuth-Endpunkte setzen: die MCP-Authentifizierung läuft über OAuth.
-
-```bash
-curl --fail https://mcp-mesh.example.com/healthz
-curl --fail https://mcp-mesh.example.com/.well-known/oauth-authorization-server
-curl -i https://mcp-mesh.example.com/mcp
-```
-
-Die ersten beiden Aufrufe müssen JSON liefern. `/mcp` ohne OAuth-Token muss **401** mit `WWW-Authenticate` liefern. Wenn die eigene Subdomain anders heißt, `publicUrl` anpassen und Dienst neu starten. Die öffentlichen Anmelde-/MCP-Pfade dürfen nicht als statische Webseiten behandelt werden.
-
-## 6. Persönliches Plugin in ChatGPT anlegen
-
-ChatGPT im **Webbrowser** öffnen:
-
-1. **Plugins → Plus → Eigenen MCP-Server hinzufügen**.
-2. Name: `MeshCentral`.
-3. Server-URL: `https://mcp-mesh.example.com/mcp`.
-4. Authentifizierung: **OAuth**. Statische Client-ID/Client-Secret leer lassen, damit dynamische Clientregistrierung verwendet wird. Falls eine Auswahl angezeigt wird, **DCR** verwenden; dieser Server implementiert keine CIMD-Clientregistrierung.
-5. Die Zugriffsprüfung lesen und **Als Plugin erstellen** auswählen.
-6. Das persönliche Plugin installieren und verbinden. Auf der Anmeldeseite das separate **Brücken-Passwort** eingeben; den sichtbaren Client, die Rückleitung und den Berechtigungsumfang prüfen.
-7. In einem neuen Work-Chat `@MeshCentral` auswählen.
-
-Erste Anfrage:
-
-> Zeige mit MeshCentral alle freigegebenen Geräte und prüfe den Status von Beispielserver.
-
-Damit ist das erste Setup ausschließlich lesend getestet.
-
-## 7. Befehle aktivieren
-
-Wenn die Geräteübersicht funktioniert, in `config.json` `"enableCommands": false` auf `true` ändern:
-
-```bash
-nano /opt/meshcentral-mcp/config.json
-systemctl --user restart meshcentral-mcp.service
-```
-
-Anschließend in ChatGPT die Werkzeuge der Verbindung aktualisieren und OAuth erneut verbinden. Die Freigabe muss jetzt `mesh:execute` einschließen. Alte Tokens verfallen durch den Neustart. Nach erfolgreicher Freigabe:
-
-> Führe auf Beispielserver nur `hostname`, `whoami` und `uptime` aus. Frage anschließend die Auftragsrückmeldung ab.
-
-Diese drei Befehle prüfen die Anbindung, ohne die Gerätekonfiguration zu ändern. Ausführung zunächst bewusst mit kurzen Befehlen testen. Lange Updates, Reboots und interaktive Installer müssen separat geplant werden; die Brücke besitzt keine garantierte Prozessabbruchfunktion.
-
-## Weitere Geräte, Updates und Abschalten
-
-Zusätzliche vollständige Geräte-IDs in `allowedNodeIds` eintragen und Dienst neu starten. Der MeshCentral-Benutzer muss für diese Geräte ebenfalls freigegeben sein.
-
-Bei geändertem Quellcode oder Lockfile:
-
-```bash
-cd /opt/meshcentral-mcp
-podman build -t localhost/meshcentral-mcp:0.1.0 -f Containerfile .
-systemctl --user restart meshcentral-mcp.service
-```
-
-Anschließend Plugin-Werkzeuge aktualisieren und neu authentifizieren. Die lokale Bridge-Version aktualisiert sich nicht automatisch. Für Zugangsdatenwechsel Podman-Secrets gezielt ersetzen und den Container neu erzeugen; bestehende Secrets sind nicht live aktualisierbar. Keine Zugangsdaten in Logs oder Befehlszeilen schreiben.
-
-```bash
-systemctl --user stop meshcentral-mcp.service
-```
-
-Zum Deaktivieren über Neustarts hinweg die Quadlet-Datei aus `~/.config/containers/systemd/` herausnehmen und `systemctl --user daemon-reload` aufrufen. Datenvolume und Secrets werden dadurch nicht gelöscht.
-
-## Validierung
-
-```bash
-npm ci --ignore-scripts
+npm ci
+npm run build:plugin
 npm test
 npm audit --omit=dev
 ```
 
-Automatisiert geprüft: Konfigurationsgrenzen, OAuth-Passwortprüfung, Redirect-Prüfung, PKCE, einmalige Autorisierungscodes, Tokenrotation/Widerruf, MCP-Initialisierung/Werkzeugaufrufe, Scope-Prüfung, Gerätefreigaben, WebSocket-Rückmeldungszuordnung, parallele Auftragsgrenzen und fehlende automatische Wiederholung.
+Das vorgebaute CommonJS-Bundle `dist/bridge.cjs` gehört zur Installation. Es bündelt den MCP-SDK, Express, WebSocket-Client und Laufzeitabhängigkeiten. Der Pluginloader braucht keinen Zugriff auf ein separates `node_modules`-Verzeichnis. Lizenzhinweise der Abhängigkeiten liegen in `THIRD_PARTY_NOTICES.txt` und `dist/bridge.cjs.LEGAL.txt`.
 
-**MCP-Adapter, Containerbuild, Plesk-Proxy und Pluginverbindung müssen vor dem Produktivbetrieb in der jeweiligen Umgebung live getestet werden.**
+Neun automatisierte Tests prüfen OAuth mit PKCE, Tokenrotation, MCP-Aufrufe, Geräte- und Scope-Grenzen, Rückmeldungszuordnung, fehlende automatische Wiederholung sowie den nativen Pluginloader, Adminrechte, CSRF, HTTPS-Pfadführung und Deaktivierung. **Eine Installation auf einem echten MeshCentral-Server wurde noch nicht durchgeführt.**
+
+Der eigenständige Podman-Dienst bleibt optional verfügbar: [Anleitung](docs/STANDALONE.md). Seine lokale Konfiguration heißt jetzt `bridge.config.json`; das Root-`config.json` ist ausschließlich das MeshCentral-Installationsmanifest.
 
 ## Quellen
 
-- OpenAI: https://developers.openai.com/plugins/build/mcp-server
-- Eigenen MCP-Server verbinden: https://developers.openai.com/api/docs/guides/custom-mcp-server
-- MeshCentral MeshCtrl: https://docs.meshcentral.com/meshctrl/
-- Protokollvorlage: https://github.com/Ylianst/MeshCentral/blob/master/meshctrl.js
-- Agent-Befehlsrückmeldungen: https://github.com/Ylianst/MeshCentral/blob/master/agents/meshcore.js
-- Podman Quadlet: https://docs.podman.io/en/stable/markdown/podman-systemd.unit.5.html
-- Plesk nginx-Regeln: https://support.plesk.com/hc/en-us/articles/12377110016151-Can-t-add-location-to-additional-nginx-directives-in-Plesk-nginx-emerg-duplicate-location
+- MeshCentral-Pluginformat und Hooks: https://docs.meshcentral.com/meshcentral/plugins/
+- Pluginloader: https://github.com/Ylianst/MeshCentral/blob/master/pluginHandler.js
+- HTTP-Hooks und Adminpanel: https://github.com/Ylianst/MeshCentral/blob/master/webserver.js
+- Control-Protokoll: https://github.com/Ylianst/MeshCentral/blob/master/meshctrl.js
+- Agent-Rückmeldungen: https://github.com/Ylianst/MeshCentral/blob/master/agents/meshcore.js
+- Eigene MCP-Plugins in ChatGPT: https://developers.openai.com/api/docs/guides/custom-mcp-server
 
-Eigenständige Integration, kein offizielles MeshCentral- oder OpenAI-Plugin. Quellenstand: 12.10.2026.
+Eigenständige Integration, kein offizielles MeshCentral- oder OpenAI-Plugin. Stand: 12.10.2026.
