@@ -1,0 +1,13 @@
+{
+  "publicUrl": "https://mcp-mesh.example.com",
+  "meshUrl": "https://mesh.example.com/",
+  "meshUsername": "mcp-service",
+  "meshPasswordFile": "/run/secrets/mesh-password",
+  "ownerPasswordHashFile": "/run/secrets/owner-hash",
+  "allowedNodeIds": ["node//GERAETE-ID-HIER-EINTRAGEN"],
+  "enableCommands": false,
+  "dataDirectory": "/app/data",
+  "port": 8787,
+  "bind": "0.0.0.0",
+  "commandTimeoutSeconds": 120
+}
