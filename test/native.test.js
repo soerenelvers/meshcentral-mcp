@@ -1,0 +1,54 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { mkdtempSync, mkdirSync, copyFileSync, readFileSync, statSync, rmSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import express from 'express';
+
+const require = createRequire(import.meta.url);
+test('native plugin installs without node_modules and enforces admin/CSRF/disable',async(t)=> {
+  const dir=mkdtempSync(join(tmpdir(),'meshcentral-native-'));
+  t.after(()=>rmSync(dir,{recursive:true,force:true}));
+  mkdirSync(join(dir,'dist'));
+  copyFileSync(resolve('meshcentralmcp.js'),join(dir,'meshcentralmcp.js'));
+  copyFileSync(resolve('dist/bridge.cjs'),join(dir,'dist/bridge.cjs'));
+  const factory=require(join(dir,'meshcentralmcp.js')).meshcentralmcp;
+  const parent={parent:{datapath:join(dir,'data')},plugins:{}};
+  const plugin=factory(parent);parent.plugins.meshcentralmcp=plugin;
+  const host=express();host.use(express.urlencoded({extended:false}));
+  plugin.hook_setupHttpHandlers({app:host});
+  const user={_id:'user//admin',siteadmin:0xFFFFFFFF};
+  host.get('/pluginadmin.ashx',(req,res)=>plugin.handleAdminReq(req,res,user));
+  host.post('/pluginadmin.ashx',(req,res)=>plugin.handleAdminPostReq(req,res,user));
+  host.get('/denied',(req,res)=>plugin.handleAdminReq(req,res,{_id:'user//other',siteadmin:0}));
+  host.use((req,res)=>res.status(404).end());
+  const server=host.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
+  t.after(()=>{server.closeAllConnections();server.close();if(plugin.app)plugin.app.bridgeDispose();});
+  const base='http://127.0.0.1:'+server.address().port;
+  assert.equal((await fetch(base+'/meshcentral-mcp/mcp')).status,503);
+  assert.equal((await fetch(base+'/denied')).status,403);
+  const html=await (await fetch(base+'/pluginadmin.ashx')).text();
+  const token=html.match(/name="csrf" value="([^"]+)"/)[1];
+  const form={csrf:token,publicUrl:'https://mesh.example.com/meshcentral-mcp',meshUrl:'https://mesh.example.com/',meshUsername:'mcp-service',meshPassword:'test-service-password',ownerPassword:'test-bridge-password-strong',nodes:'node//test'};
+  const submit=b=>fetch(base+'/pluginadmin.ashx',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(b)});
+  assert.equal((await submit({...form,csrf:'wrong'})).status,403);
+  const saved=await submit(form);assert.equal(saved.status,200);const savedHtml=await saved.text();assert.match(savedHtml,/Gespeichert/);assert.ok(!savedHtml.includes(form.meshPassword));assert.ok(!savedHtml.includes(form.ownerPassword));
+  const cfg=JSON.parse(readFileSync(join(dir,'data/meshcentral-mcp/settings.json')));assert.equal(cfg.enableCommands,false);assert.equal(cfg.publicUrl,form.publicUrl);assert.equal(statSync(join(dir,'data/meshcentral-mcp/settings.json')).mode&0o777,0o600);
+  assert.equal((await submit(form)).status,403);
+  const m=await (await fetch(base+'/meshcentral-mcp/.well-known/oauth-authorization-server')).json();assert.equal(m.authorization_endpoint,form.publicUrl+'/authorize');
+  const m2=await (await fetch(base+'/.well-known/oauth-authorization-server/meshcentral-mcp')).json();assert.equal(m2.issuer,form.publicUrl);
+  const challenge=await fetch(base+'/meshcentral-mcp/mcp');assert.equal(challenge.status,401);assert.match(challenge.headers.get('www-authenticate'),/meshcentral-mcp/);
+  const registration=await fetch(base+'/meshcentral-mcp/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({redirect_uris:['https://chatgpt.com/callback']})});assert.equal(registration.status,201);const client=await registration.json();
+  const params=new URLSearchParams({client_id:client.client_id,redirect_uri:'https://chatgpt.com/callback',response_type:'code',code_challenge_method:'S256',code_challenge:'x'.repeat(43)});
+  const loginHtml=await (await fetch(base+'/meshcentral-mcp/authorize?'+params)).text();assert.match(loginHtml,/action="https:\/\/mesh.example.com\/meshcentral-mcp\/authorize"/);
+  delete parent.plugins.meshcentralmcp;
+  assert.equal((await fetch(base+'/meshcentral-mcp/.well-known/oauth-authorization-server')).status,503);
+});
+
+test('MeshCentral manifest and archive-layout contract',()=> {
+  const manifest=require('../config.json');
+  assert.equal(manifest.shortName,'meshcentralmcp');assert.equal(manifest.hasAdminPanel,true);assert.equal(typeof require('../meshcentralmcp.js')[manifest.shortName],'function');
+  assert.ok(readFileSync('dist/bridge.cjs','utf8').includes('MeshCentral'));
+  for(const key of ['configUrl','downloadUrl','homepage','changelogUrl'])assert.equal(new URL(manifest[key]).protocol,'https:');
+});
