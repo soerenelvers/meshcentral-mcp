@@ -4,7 +4,7 @@ import { createInterface } from 'node:readline/promises';
 import { validateConfig } from './config.js';
 
 if(!process.stdin.isTTY) throw new Error('Setup benötigt ein interaktives Terminal.');
-if(existsSync('config.json') || existsSync('secrets')) throw new Error('Konfiguration oder secrets existiert bereits. Keine Dateien überschrieben.');
+if(existsSync('bridge.config.json') || existsSync('secrets')) throw new Error('Konfiguration oder secrets existiert bereits. Keine Dateien überschrieben.');
 const rl=createInterface({input:process.stdin,output:process.stdout});
 const url=(await rl.question('Öffentliche HTTPS-Origin [https://mcp-mesh.example.com]: ')).trim() || 'https://mcp-mesh.example.com';
 const meshUrl=(await rl.question('MeshCentral-URL [https://mesh.example.com/]: ')).trim() || 'https://mesh.example.com/';
@@ -31,5 +31,5 @@ const salt=randomBytes(16).toString('hex'),hash=scryptSync(owner,salt,64).toStri
 mkdirSync('secrets',{mode:0o700});
 writeFileSync('secrets/mesh-password',password,{mode:0o600});
 writeFileSync('secrets/owner-hash',salt+':'+hash,{mode:0o600});
-writeFileSync('config.json',JSON.stringify(config,null,2)+'\n',{mode:0o644});
+writeFileSync('bridge.config.json',JSON.stringify(config,null,2)+'\n',{mode:0o644});
 console.log('Konfiguration erstellt. Befehle zunächst deaktiviert.');
