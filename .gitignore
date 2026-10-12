@@ -1,4 +1,4 @@
 node_modules/
 secrets/
-config.json
+bridge.config.json
 *.log
