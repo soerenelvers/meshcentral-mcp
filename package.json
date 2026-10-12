@@ -1,20 +1,24 @@
 {
   "name": "meshcentral-mcp-bridge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "type": "module",
+  "type": "commonjs",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "start": "node src/main.js",
     "test": "node --test",
-    "setup": "node src/setup.js"
+    "setup": "node src/setup.js",
+    "build:plugin": "esbuild src/native-entry.js --bundle --minify --legal-comments=linked --platform=node --format=cjs --target=node22 --external:bufferutil --external:utf-8-validate --outfile=dist/bridge.cjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",
     "express": "5.1.0",
     "ws": "8.22.0",
     "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
   }
 }
