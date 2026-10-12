@@ -51,7 +51,7 @@ export function installOAuth(app,config) {
     if(flows.size>=500) return res.status(429).send('Zu viele Anfragen.');
     const flow=random(); flows.set(flow,{clientId:q.client_id,redirectUri:q.redirect_uri,challenge:q.code_challenge,scope:requested.join(' '),state:typeof q.state==='string'?q.state.slice(0,2048):'',expiresAt:Date.now()+300000});
     res.set('Content-Security-Policy',"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
-    res.type('html').send(`<!doctype html><html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>MeshCentral verbinden</title><style>body{font:16px system-ui;max-width:620px;margin:60px auto;padding:24px;background:#f3f5f7}main{background:white;padding:28px;border-radius:12px}input,button{font:inherit;padding:12px;margin-top:12px;width:100%;box-sizing:border-box}button{background:#164e72;color:white;border:0;border-radius:6px}</style><main><h1>MeshCentral verbinden</h1><p>Client: ${escape(c.client_name)}</p><p>Rückleitung: ${escape(new URL(q.redirect_uri).origin)}</p><p>Freigabe: ${escape(requested.join(', '))}. ${requested.includes('mesh:execute')?'Befehle laufen mit den Rechten des MeshCentral-Agenten, möglicherweise als root/SYSTEM.':''}</p><form method="post" action="/authorize"><input type="hidden" name="flow" value="${flow}"><label>Brücken-Passwort<input type="password" name="password" autocomplete="current-password" required maxlength="1024"></label><button name="decision" value="approve">Zugriff erlauben</button><button name="decision" value="deny">Abbrechen</button></form></main></html>`);
+    res.type('html').send(`<!doctype html><html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>MeshCentral verbinden</title><style>body{font:16px system-ui;max-width:620px;margin:60px auto;padding:24px;background:#f3f5f7}main{background:white;padding:28px;border-radius:12px}input,button{font:inherit;padding:12px;margin-top:12px;width:100%;box-sizing:border-box}button{background:#164e72;color:white;border:0;border-radius:6px}</style><main><h1>MeshCentral verbinden</h1><p>Client: ${escape(c.client_name)}</p><p>Rückleitung: ${escape(new URL(q.redirect_uri).origin)}</p><p>Freigabe: ${escape(requested.join(', '))}. ${requested.includes('mesh:execute')?'Befehle laufen mit den Rechten des MeshCentral-Agenten, möglicherweise als root/SYSTEM.':''}</p><form method="post" action="${escape(issuer)}/authorize"><input type="hidden" name="flow" value="${flow}"><label>Brücken-Passwort<input type="password" name="password" autocomplete="current-password" required maxlength="1024"></label><button name="decision" value="approve">Zugriff erlauben</button><button name="decision" value="deny">Abbrechen</button></form></main></html>`);
   });
   // A single owner, limited attempts across the instance. Passwords are never logged.
   let attempts=[];
@@ -89,10 +89,12 @@ export function installOAuth(app,config) {
     res.status(400).json({error:'unsupported_grant_type'});
   });
   app.post('/revoke',(req,res)=> {const key=digest(String(req.body.token || '')); tokens.delete(key);refresh.delete(key);res.status(200).end();});
-  return (req,res,next)=> {
+  const authenticate = (req,res,next)=> {
     const raw=req.headers.authorization;
     const token=typeof raw==='string' && raw.startsWith('Bearer ') ? tokens.get(digest(raw.slice(7))) : null;
     if(!token || token.expiresAt<=Date.now()) {res.set('WWW-Authenticate',`Bearer resource_metadata="${issuer}/.well-known/oauth-protected-resource/mcp"`);return res.status(401).json({error:'invalid_token'});}
     req.meshScopes=token.scope.split(' ');next();
   };
+  authenticate.dispose = () => { clearInterval(timer); tokens.clear(); refresh.clear(); flows.clear(); codes.clear(); };
+  return authenticate;
 }
